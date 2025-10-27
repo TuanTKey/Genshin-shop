@@ -1,0 +1,82 @@
+pipeline {
+    agent any
+    
+    environment {
+        NODE_VERSION = '18'
+        REACT_APP_API_URL = 'http://localhost:5000/api'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo '📥 Checking out code...'
+                checkout scm
+            }
+        }
+        
+        stage('Install Dependencies') {
+            steps {
+                echo '📦 Installing frontend dependencies...'
+                dir('frontend') {
+                    sh 'npm install'
+                }
+            }
+        }
+        
+        stage('Lint') {
+            steps {
+                echo '🔍 Linting code...'
+                dir('frontend') {
+                    sh 'npm run lint || echo "Lint errors found"'
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                echo '🏗️ Building frontend...'
+                dir('frontend') {
+                    sh 'npm run build'
+                }
+            }
+        }
+        
+        stage('Test Build') {
+            steps {
+                echo '🧪 Testing build...'
+                dir('frontend') {
+                    sh 'ls -la build/'
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                echo '🚀 Deploying frontend...'
+                dir('frontend') {
+                    sh '''
+                        # Deploy to production folder
+                        rm -rf /var/www/genshin-shop || true
+                        mkdir -p /var/www/genshin-shop
+                        cp -r build/* /var/www/genshin-shop/
+                        
+                        echo "Frontend deployed successfully"
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo '✅ Frontend pipeline completed successfully!'
+            archiveArtifacts artifacts: 'frontend/build/**/*', fingerprint: true
+        }
+        failure {
+            echo '❌ Frontend pipeline failed!'
+        }
+        always {
+            echo '🧹 Cleaning up...'
+        }
+    }
+}

@@ -1,0 +1,58 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_COMPOSE_VERSION = '2.20.0'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo '📥 Checking out code...'
+                checkout scm
+            }
+        }
+        
+        stage('Stop Existing Containers') {
+            steps {
+                echo '🛑 Stopping existing containers...'
+                sh 'docker-compose down || true'
+            }
+        }
+        
+        stage('Build Images') {
+            steps {
+                echo '🏗️ Building Docker images...'
+                sh 'docker-compose build --no-cache'
+            }
+        }
+        
+        stage('Start Services') {
+            steps {
+                echo '🚀 Starting services...'
+                sh 'docker-compose up -d'
+            }
+        }
+        
+        stage('Health Check') {
+            steps {
+                echo '🏥 Running health checks...'
+                sh '''
+                    sleep 10
+                    curl -f http://localhost:5000/ || exit 1
+                    curl -f http://localhost/ || exit 1
+                '''
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo '✅ Deployment successful!'
+        }
+        failure {
+            echo '❌ Deployment failed!'
+            sh 'docker-compose logs'
+        }
+    }
+}

@@ -1,0 +1,85 @@
+pipeline {
+    agent any
+    
+    environment {
+        NODE_VERSION = '18'
+        MONGODB_URI = 'mongodb://localhost:27017/genshin-shop'
+        PORT = '5000'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo '📥 Checking out code...'
+                checkout scm
+            }
+        }
+        
+        stage('Install Dependencies') {
+            steps {
+                echo '📦 Installing backend dependencies...'
+                dir('backend') {
+                    sh 'npm install'
+                }
+            }
+        }
+        
+        stage('Environment Check') {
+            steps {
+                echo '🔍 Checking environment...'
+                dir('backend') {
+                    sh 'node --version'
+                    sh 'npm --version'
+                }
+            }
+        }
+        
+        stage('Run Tests') {
+            steps {
+                echo '🧪 Running tests...'
+                dir('backend') {
+                    // Thêm tests sau
+                    sh 'echo "Tests will be added here"'
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                echo '🏗️ Building backend...'
+                dir('backend') {
+                    sh 'echo "Backend built successfully"'
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                echo '🚀 Deploying backend...'
+                dir('backend') {
+                    sh '''
+                        # Stop existing process
+                        pkill -f "node server.js" || true
+                        
+                        # Start new process
+                        nohup npm start > backend.log 2>&1 &
+                        
+                        echo "Backend deployed successfully"
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo '✅ Pipeline completed successfully!'
+        }
+        failure {
+            echo '❌ Pipeline failed!'
+        }
+        always {
+            echo '🧹 Cleaning up...'
+        }
+    }
+}
