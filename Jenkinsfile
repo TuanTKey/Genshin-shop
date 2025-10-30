@@ -283,90 +283,91 @@ pipeline {
                 """
             }
         }
+
         stage('Database Health Check') {
-    steps {
-        echo '📊 Checking database data...'
-        script {
-            try {
-                // Kiểm tra MongoDB connection và data
-                def dbCheck = sh(
-                    script: """
-                    # Kiểm tra MongoDB connection
-                    if mongosh --eval "db.adminCommand('ping')" > /dev/null 2>&1; then
-                        echo "✅ MongoDB is running"
+            steps {
+                echo '📊 Checking database data...'
+                script {
+                    try {
+                        // Kiểm tra MongoDB connection và data - DÙNG MONGO THAY VÌ MONGOSH
+                        def dbCheck = sh(
+                            script: """
+                            # Kiểm tra MongoDB connection với mongo (tương thích hơn)
+                            if mongo --eval "db.adminCommand('ping')" --quiet > /dev/null 2>&1; then
+                                echo "✅ MongoDB is running"
+                                
+                                # Lấy thống kê database - SỬ DỤNG SYNTAX MONGO CŨ
+                                mongo genshin-shop --eval "
+                                print('=== Genshin Shop Database Stats ===');
+                                print('📱 Users: ' + db.users.count());
+                                print('📦 Orders: ' + db.orders.count()); 
+                                print('👤 Accounts: ' + db.accounts.count());
+                                
+                                // Hiển thị 3 users mới nhất - DÙNG FUNCTION THAY VÌ ARROW
+                                print('\\\\n👥 Recent Users (3):');
+                                db.users.find().sort({_id: -1}).limit(3).forEach(function(user) {
+                                    print('   - ' + (user.email || 'No email') + ' | ' + (user.name || 'No name'));
+                                });
+                                
+                                // Hiển thị 3 orders mới nhất - DÙNG FUNCTION THAY VÌ ARROW
+                                print('\\\\n📦 Recent Orders (3):');
+                                db.orders.find().sort({_id: -1}).limit(3).forEach(function(order) {
+                                    print('   - Order: ' + order._id + ' | Total: ' + (order.totalAmount || 'N/A'));
+                                });
+                                
+                                // Hiển thị 3 accounts mới nhất - DÙNG FUNCTION THAY VÌ ARROW
+                                print('\\\\n👤 Recent Accounts (3):');
+                                db.accounts.find().sort({_id: -1}).limit(3).forEach(function(account) {
+                                    print('   - Account: ' + (account.username || 'No username'));
+                                });
+                                " --quiet
+                            else
+                                echo '❌ MongoDB is not accessible'
+                                exit 1
+                            fi
+                            """,
+                            returnStdout: true
+                        )
                         
-                        # Lấy thống kê database
-                        mongosh genshin-shop --eval "
-                        print('=== Genshin Shop Database Stats ===');
-                        print('📱 Users: ' + db.users.count());
-                        print('📦 Orders: ' + db.orders.count()); 
-                        print('👤 Accounts: ' + db.accounts.count());
+                        echo "Database Status:\\n${dbCheck}"
+                        env.DB_STATUS = dbCheck
                         
-                        // Hiển thị 3 users mới nhất
-                        print('\\\\n👥 Recent Users (3):');
-                        db.users.find().sort({_id: -1}).limit(3).forEach(user => {
-                            print('   - ' + (user.email || 'No email') + ' | ' + (user.name || 'No name'));
-                        });
-                        
-                        // Hiển thị 3 orders mới nhất  
-                        print('\\\\n📦 Recent Orders (3):');
-                        db.orders.find().sort({_id: -1}).limit(3).forEach(order => {
-                            print('   - Order: ' + order._id + ' | Total: ' + (order.totalAmount || 'N/A'));
-                        });
-                        
-                        // Hiển thị 3 accounts mới nhất
-                        print('\\\\n👤 Recent Accounts (3):');
-                        db.accounts.find().sort({_id: -1}).limit(3).forEach(account => {
-                            print('   - Account: ' + (account.username || 'No username'));
-                        });
-                        " --quiet
-                    else
-                        echo '❌ MongoDB is not accessible'
-                        exit 1
-                    fi
-                    """,
-                    returnStdout: true
-                )
-                
-                echo "Database Status:\\n${dbCheck}"
-                env.DB_STATUS = dbCheck
-                
-            } catch (Exception e) {
-                echo "❌ Database check failed: ${e.message}"
-                env.DB_STATUS = "Database check failed: ${e.message}"
+                    } catch (Exception e) {
+                        echo "❌ Database check failed: ${e.message}"
+                        env.DB_STATUS = "Database check failed: ${e.message}"
+                    }
+                }
             }
         }
-    }
-}
 
-stage('Generate Database Report') {
-    steps {
-        echo '📈 Generating database report...'
-        script {
-            // Parse data từ DB check
-            def usersCount = sh(
-                script: '''
-                mongosh genshin-shop --eval "db.users.count()" --quiet
-                ''',
-                returnStdout: true
-            ).trim()
-            
-            def ordersCount = sh(
-                script: '''
-                mongosh genshin-shop --eval "db.orders.count()" --quiet
-                ''',
-                returnStdout: true
-            ).trim()
-            
-            def accountsCount = sh(
-                script: '''
-                mongosh genshin-shop --eval "db.accounts.count()" --quiet
-                ''',
-                returnStdout: true
-            ).trim()
-            
-            // Tạo HTML report
-            writeFile file: 'database-report.html', text: """
+        stage('Generate Database Report') {
+            steps {
+                echo '📈 Generating database report...'
+                script {
+                    // Parse data từ DB check - DÙNG MONGO THAY VÌ MONGOSH
+                    def usersCount = sh(
+                        script: '''
+                        mongo genshin-shop --eval "print(db.users.count())" --quiet
+                        ''',
+                        returnStdout: true
+                    ).trim()
+                    
+                    def ordersCount = sh(
+                        script: '''
+                        mongo genshin-shop --eval "print(db.orders.count())" --quiet
+                        ''',
+                        returnStdout: true
+                    ).trim()
+                    
+                    def accountsCount = sh(
+                        script: '''
+                        mongo genshin-shop --eval "print(db.accounts.count())" --quiet
+                        ''',
+                        returnStdout: true
+                    ).trim()
+                    
+                    // Tạo HTML report
+                    writeFile file: 'database-report.html', text: """
 <!DOCTYPE html>
 <html>
 <head>
@@ -425,29 +426,6 @@ stage('Generate Database Report') {
             font-size: 1.4em;
             margin-bottom: 15px;
             color: #495057;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        .data-table th {
-            background: #e9ecef;
-            padding: 12px;
-            text-align: left;
-            font-weight: 600;
-        }
-        .data-table td {
-            padding: 12px;
-            border-bottom: 1px solid #dee2e6;
-        }
-        .data-table tr:hover {
-            background: #f8f9fa;
         }
         .timestamp {
             text-align: center;
@@ -481,7 +459,7 @@ stage('Generate Database Report') {
         
         <div class="section">
             <div class="section-title">📊 Database Information</div>
-            <pre style="background: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 5px; overflow: auto;">${env.DB_STATUS ?: 'No data available'}</pre>
+            <pre style="background: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 5px; overflow: auto; white-space: pre-wrap;">${env.DB_STATUS ?: 'No data available'}</pre>
         </div>
         
         <div class="timestamp">
@@ -491,25 +469,24 @@ stage('Generate Database Report') {
 </body>
 </html>
 """
+                }
             }
         }
-    }
-}
 
-stage('Publish Database Report') {
-    steps {
-        echo '📤 Publishing database report...'
-        publishHTML([
-            allowMissing: false,
-            alwaysLinkToLastBuild: true,
-            keepAll: true,
-            reportDir: '',
-            reportFiles: 'database-report.html',
-            reportName: '📊 Database Dashboard',
-            reportTitles: 'Genshin Shop Database Report'
-        ])
-    }
-}
+        stage('Publish Database Report') {
+            steps {
+                echo '📤 Publishing database report...'
+                publishHTML([
+                    allowMissing: false,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: '',
+                    reportFiles: 'database-report.html',
+                    reportName: '📊 Database Dashboard',
+                    reportTitles: 'Genshin Shop Database Report'
+                ])
+            }
+        }
     }
     
     post {
@@ -570,6 +547,7 @@ stage('Publish Database Report') {
             archiveArtifacts artifacts: 'backend/backend.log', allowEmptyArchive: true
             archiveArtifacts artifacts: 'frontend/build/**/*', allowEmptyArchive: true
             archiveArtifacts artifacts: 'database-report.html', allowEmptyArchive: true
+            
             // Cleanup workspace chỉ khi dùng Git
             script {
                 if (params.SOURCE_TYPE == 'git') {
