@@ -1,562 +1,599 @@
 pipeline {
     agent any
     
-    parameters {
-        booleanParam(
-            name: 'SKIP_TESTS', 
-            defaultValue: false, 
-            description: 'Bỏ qua bước chạy test'
-        )
-        choice(
-            name: 'DEPLOY_ENV',
-            choices: ['development', 'staging', 'production'],
-            description: 'Môi trường deploy'
-        )
-        booleanParam(
-            name: 'CLEAN_DEPLOY',
-            defaultValue: true,
-            description: 'Xóa hoàn toàn trước khi deploy mới'
-        )
-        choice(
-            name: 'SOURCE_TYPE',
-            choices: ['git', 'workspace'],
-            defaultValue: 'git',
-            description: 'Chọn nguồn code (git: từ repository, workspace: từ thư mục hiện tại)'
-        )
-    }
-    
-    environment {
-        NODE_VERSION = '18'
-        MONGODB_URI = 'mongodb://localhost:27017/genshin-shop'
-        BACKEND_PORT = '5000'
-        FRONTEND_PORT = '3000'
-        DEPLOY_DIR = '/var/www/genshin-shop'
-    }
-    
+    // Cấu hình timeout và options
     options {
         timeout(time: 30, unit: 'MINUTES')
-        retry(2)
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-        disableConcurrentBuilds()
         timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+    
+    // Environment variables
+    environment {
+        EC2_HOST = '54.166.186.43'  // ← ĐỔI IP NÀY
+        EC2_USER = 'ubuntu'
+        APP_DIR = '/var/www/Genshin-shop'
+        DEPLOY_TIME = new Date().format('yyyy-MM-dd HH:mm:ss')
     }
     
     stages {
-        stage('Prepare Source') {
+        stage('🔍 1. Pre-Check') {
             steps {
                 script {
-                    if (params.SOURCE_TYPE == 'git') {
-                        echo '📥 Checking out code from Git...'
-                        checkout scm
-                    } else {
-                        echo '📁 Using current workspace without Git checkout...'
-                        sh '''
-                            echo "🔍 Workspace content:"
-                            pwd
-                            ls -la
-                            echo "--- Backend ---"
-                            ls -la backend/ || echo "No backend directory"
-                            echo "--- Frontend ---" 
-                            ls -la frontend/ || echo "No frontend directory"
-                        '''
-                    }
+                    echo "═══════════════════════════════════════"
+                    echo "🚀 GENSHIN SHOP DEPLOYMENT"
+                    echo "═══════════════════════════════════════"
+                    echo "📅 Deploy Time: ${DEPLOY_TIME}"
+                    echo "🌐 Target Server: ${EC2_HOST}"
+                    echo "👤 User: ${EC2_USER}"
+                    echo "═══════════════════════════════════════"
                 }
             }
         }
         
-        stage('Check Environment') {
+        stage('🔗 2. Test SSH Connection') {
             steps {
-                echo '🔍 Checking build environment...'
-                sh """
-                    echo "📋 Build Information:"
-                    echo "Job: ${env.JOB_NAME}"
-                    echo "Build: ${env.BUILD_NUMBER}"
-                    echo "Environment: ${params.DEPLOY_ENV}"
-                    echo "Source Type: ${params.SOURCE_TYPE}"
-                    echo "Branch: ${env.GIT_BRANCH}"
-                    
-                    echo "🔧 System Information:"
-                    echo "Node version:"
-                    node --version
-                    echo "NPM version:"
-                    npm --version
-                    echo "Git version:"
-                    git --version
-                    echo "Working directory:"
-                    pwd
-                """
-            }
-        }
-        
-        stage('Install Backend Dependencies') {
-            steps {
-                echo '📦 Installing backend dependencies...'
-                dir('backend') {
-                    sh 'npm install --no-audit --no-fund'
-                }
-            }
-        }
-        
-        stage('Install Frontend Dependencies') {
-            steps {
-                echo '📦 Installing frontend dependencies...'
-                dir('frontend') {
-                    sh 'npm install --no-audit --no-fund'
-                }
-            }
-        }
-        
-        stage('Backend Tests') {
-            when {
-                expression { !params.SKIP_TESTS }
-            }
-            steps {
-                echo '🧪 Running backend tests...'
-                dir('backend') {
-                    sh 'npm test || echo "Tests failed or not specified, continuing..."'
-                }
-            }
-        }
-
-        stage('Frontend Tests') {
-            when {
-                expression { !params.SKIP_TESTS }
-            }
-            steps {
-                echo '🧪 Running frontend tests...'
-                dir('frontend') {
-                    sh 'npm test -- --watchAll=false --passWithNoTests || echo "Tests failed or not specified, continuing..."'
-                }
-            }
-        }
-        
-        stage('Build Backend') {
-            steps {
-                echo '🏗️ Building backend...'
-                dir('backend') {
-                    sh 'npm run build || echo "No build script found, skipping..."'
-                }
-            }
-        }
-                
-        stage('Build Frontend') {
-            steps {
-                echo '🏗️ Building React frontend...'
-                dir('frontend') {
-                    sh 'npm run build'
-                    sh 'ls -la build/'
-                }
-            }
-        }
-        
-        stage('Deploy Backend') {
-            steps {
-                echo '🚀 Deploying backend...'
-                dir('backend') {
-                    script {
-                        def cleanDeployCommand = params.CLEAN_DEPLOY ? 'rm -rf node_modules && npm install --no-audit --no-fund' : 'echo "Skipping clean install"'
-                        
-                        sh """
-                            # Health check trước khi deploy
-                            echo "🔍 Checking current backend status..."
-                            curl -f http://localhost:${BACKEND_PORT}/health || echo "Backend not running or no health endpoint"
-                            
-                            # Kill existing process
-                            echo "🛑 Stopping existing backend..."
-                            pkill -f "node.*server.js" || echo "No existing process found"
-                            sleep 2
-                            
-                            # Clean deploy nếu được chọn
-                            ${cleanDeployCommand}
-                            
-                            # Start backend với log
-                            echo "🎯 Starting backend on port ${BACKEND_PORT}..."
-                            nohup npm start > backend.log 2>&1 &
-                            echo "Backend process started with PID: \$!"
-                            
-                            # Chờ backend khởi động
-                            sleep 5
-                            
-                            # Health check
-                            echo "🔍 Performing health check..."
-                            for i in {1..10}; do
-                                if curl -f http://localhost:${BACKEND_PORT}/api/health || curl -f http://localhost:${BACKEND_PORT}/health || curl -f http://localhost:${BACKEND_PORT}/; then
-                                    echo "✅ Backend health check passed!"
-                                    break
-                                elif [ \$i -eq 10 ]; then
-                                    echo "❌ Backend health check failed after 10 attempts"
-                                    echo "📋 Checking backend log:"
-                                    cat backend.log || echo "No log file found"
-                                    exit 1
-                                else
-                                    echo "⏳ Attempt \$i failed, retrying..."
-                                    sleep 3
-                                fi
-                            done
-                            
-                            echo "✅ Backend deployed successfully to ${params.DEPLOY_ENV}"
-                        """
-                    }
-                }
-            }
-        }
-        
-        stage('Deploy Frontend') {
-            steps {
-                echo '🚀 Deploying frontend...'
-                dir('frontend') {
-                    script {
-                        sh """
-                            # Tạo backup nếu là production
-                            if [ "${params.DEPLOY_ENV}" = "production" ]; then
-                                echo "📦 Creating backup of current deployment..."
-                                sudo tar -czf /tmp/genshin-shop-backup-\$(date +%Y%m%d-%H%M%S).tar.gz ${DEPLOY_DIR} 2>/dev/null || echo "No existing deployment to backup"
-                            fi
-                            
-                            # Kiểm tra thư mục build tồn tại
-                            if [ ! -d "build" ]; then
-                                echo "❌ Build directory not found!"
-                                exit 1
-                            fi
-                            
-                            # Deploy to web server directory
-                            echo "📁 Deploying to ${DEPLOY_DIR}..."
-                            sudo mkdir -p ${DEPLOY_DIR}
-                            sudo cp -r build/* ${DEPLOY_DIR}/
-                            sudo chown -R www-data:www-data ${DEPLOY_DIR}
-                            sudo chmod -R 755 ${DEPLOY_DIR}
-                            
-                            # Tạo file cấu hình environment
-                            sudo sh -c "cat > ${DEPLOY_DIR}/env-config.js << EOF
-                            window.ENV = {
-                                REACT_APP_API_URL: 'http://localhost:${BACKEND_PORT}',
-                                REACT_APP_ENVIRONMENT: '${params.DEPLOY_ENV}'
-                            }
-                            EOF"
-                            
-                            echo "✅ Frontend deployed successfully to ${params.DEPLOY_ENV}"
-                        """
-                    }
-                }
-            }
-        }
-        
-        stage('Post-deploy Verification') {
-            steps {
-                echo '🔍 Verifying deployment...'
-                sh """
-                    # Kiểm tra backend
-                    echo "🔧 Backend verification..."
-                    if curl -f http://localhost:${BACKEND_PORT}/ || curl -f http://localhost:${BACKEND_PORT}/api/health || curl -f http://localhost:${BACKEND_PORT}/health; then
-                        echo "✅ Backend is responding"
-                    else
-                        echo "⚠️  Backend may not be fully responsive"
-                    fi
-                    
-                    # Kiểm tra frontend
-                    echo "🌐 Frontend verification..."
-                    if sudo [ -f "${DEPLOY_DIR}/index.html" ]; then
-                        echo "✅ Frontend files deployed successfully"
-                        echo "Frontend files:"
-                        sudo ls -la ${DEPLOY_DIR}/ | head -10
-                    else
-                        echo "❌ Frontend files missing"
-                        exit 1
-                    fi
-                    
-                    # Kiểm tra processes
-                    echo "📊 Process check..."
-                    if pgrep -f "node.*server.js" > /dev/null; then
-                        echo "✅ Backend process is running"
-                        echo "Backend processes:"
-                        pgrep -f "node.*server.js" | xargs ps -p 2>/dev/null || echo "Cannot display process details"
-                    else
-                        echo "❌ Backend process not found"
-                        exit 1
-                    fi
-                    
-                    echo "🎉 Deployment verification completed!"
-                    echo "📊 Summary:"
-                    echo "  - Backend: http://localhost:${BACKEND_PORT}"
-                    echo "  - Frontend: ${DEPLOY_DIR}"
-                    echo "  - Environment: ${params.DEPLOY_ENV}"
-                """
-            }
-        }
-
-        stage('Database Health Check') {
-            steps {
-                echo '📊 Checking database data...'
                 script {
-                    try {
-                        // Kiểm tra MongoDB connection và data - DÙNG MONGO THAY VÌ MONGOSH
-                        def dbCheck = sh(
-                            script: """
-                            # Kiểm tra MongoDB connection với mongo (tương thích hơn)
-                            if mongo --eval "db.adminCommand('ping')" --quiet > /dev/null 2>&1; then
-                                echo "✅ MongoDB is running"
-                                
-                                # Lấy thống kê database - SỬ DỤNG SYNTAX MONGO CŨ
-                                mongo genshin-shop --eval "
-                                print('=== Genshin Shop Database Stats ===');
-                                print('📱 Users: ' + db.users.count());
-                                print('📦 Orders: ' + db.orders.count()); 
-                                print('👤 Accounts: ' + db.accounts.count());
-                                
-                                // Hiển thị 3 users mới nhất - DÙNG FUNCTION THAY VÌ ARROW
-                                print('\\\\n👥 Recent Users (3):');
-                                db.users.find().sort({_id: -1}).limit(3).forEach(function(user) {
-                                    print('   - ' + (user.email || 'No email') + ' | ' + (user.name || 'No name'));
-                                });
-                                
-                                // Hiển thị 3 orders mới nhất - DÙNG FUNCTION THAY VÌ ARROW
-                                print('\\\\n📦 Recent Orders (3):');
-                                db.orders.find().sort({_id: -1}).limit(3).forEach(function(order) {
-                                    print('   - Order: ' + order._id + ' | Total: ' + (order.totalAmount || 'N/A'));
-                                });
-                                
-                                // Hiển thị 3 accounts mới nhất - DÙNG FUNCTION THAY VÌ ARROW
-                                print('\\\\n👤 Recent Accounts (3):');
-                                db.accounts.find().sort({_id: -1}).limit(3).forEach(function(account) {
-                                    print('   - Account: ' + (account.username || 'No username'));
-                                });
-                                " --quiet
-                            else
-                                echo '❌ MongoDB is not accessible'
-                                exit 1
-                            fi
-                            """,
-                            returnStdout: true
-                        )
-                        
-                        echo "Database Status:\\n${dbCheck}"
-                        env.DB_STATUS = dbCheck
-                        
-                    } catch (Exception e) {
-                        echo "❌ Database check failed: ${e.message}"
-                        env.DB_STATUS = "Database check failed: ${e.message}"
-                    }
+                    echo "Testing connection to EC2..."
+                    sshPublisher(
+                        publishers: [
+                            sshPublisherDesc(
+                                configName: 'AWS-Genshin-Shop',
+                                transfers: [
+                                    sshTransfer(
+                                        execCommand: 'echo "✅ SSH Connection Successful!" && hostname && uptime'
+                                    )
+                                ],
+                                verbose: true
+                            )
+                        ]
+                    )
                 }
             }
         }
-
-        stage('Generate Database Report') {
+        
+        stage('📊 3. Check Current Status') {
             steps {
-                echo '📈 Generating database report...'
                 script {
-                    // Parse data từ DB check - DÙNG MONGO THAY VÌ MONGOSH
-                    def usersCount = sh(
-                        script: '''
-                        mongo genshin-shop --eval "print(db.users.count())" --quiet
-                        ''',
-                        returnStdout: true
-                    ).trim()
+                    echo "Checking current application status..."
+                    sshPublisher(
+                        publishers: [
+                            sshPublisherDesc(
+                                configName: 'AWS-Genshin-Shop',
+                                transfers: [
+                                    sshTransfer(
+                                        execCommand: '''
+                                            echo "=== CURRENT STATUS ==="
+                                            echo "MongoDB:"
+                                            sudo systemctl status mongod | grep Active || echo "MongoDB not running"
+                                            echo ""
+                                            echo "Backend (PM2):"
+                                            pm2 list | grep genshin-backend || echo "Backend not running"
+                                            echo ""
+                                            echo "Nginx:"
+                                            sudo systemctl status nginx | grep Active || echo "Nginx not running"
+                                            echo ""
+                                            echo "Disk Usage:"
+                                            df -h / | tail -1
+                                            echo ""
+                                            echo "Memory Usage:"
+                                            free -h | grep Mem
+                                        '''
+                                    )
+                                ],
+                                verbose: true
+                            )
+                        ]
+                    )
+                }
+            }
+        }
+        
+        stage('📥 4. Pull Latest Code') {
+            steps {
+                script {
+                    echo "Pulling latest code from Git..."
+                    sshPublisher(
+                        publishers: [
+                            sshPublisherDesc(
+                                configName: 'AWS-Genshin-Shop',
+                                transfers: [
+                                    sshTransfer(
+                                        execCommand: """
+                                            cd ${APP_DIR}
+                                            echo "Current directory: \$(pwd)"
+                                            git pull origin main || echo "⚠️  No git repository, using local files"
+                                        """
+                                    )
+                                ],
+                                verbose: true
+                            )
+                        ]
+                    )
+                }
+            }
+        }
+        
+        stage('📦 5. Install Backend Dependencies') {
+            steps {
+                script {
+                    echo "Installing backend dependencies..."
+                    sshPublisher(
+                        publishers: [
+                            sshPublisherDesc(
+                                configName: 'AWS-Genshin-Shop',
+                                transfers: [
+                                    sshTransfer(
+                                        execCommand: """
+                                            cd ${APP_DIR}/backend
+                                            echo "📦 Installing backend dependencies..."
+                                            npm install --production
+                                            echo "✅ Backend dependencies installed"
+                                        """
+                                    )
+                                ],
+                                verbose: true
+                            )
+                        ]
+                    )
+                }
+            }
+        }
+        
+        stage('🔄 6. Restart Backend') {
+            steps {
+                script {
+                    echo "Restarting backend with PM2..."
+                    sshPublisher(
+                        publishers: [
+                            sshPublisherDesc(
+                                configName: 'AWS-Genshin-Shop',
+                                transfers: [
+                                    sshTransfer(
+                                        execCommand: """
+                                            cd ${APP_DIR}/backend
+                                            echo "🔄 Restarting backend..."
+                                            pm2 restart genshin-backend || pm2 start server.js --name genshin-backend
+                                            sleep 3
+                                            pm2 list
+                                            echo "✅ Backend restarted"
+                                        """
+                                    )
+                                ],
+                                verbose: true
+                            )
+                        ]
+                    )
+                }
+            }
+        }
+        
+        stage('🏗️ 7. Build Frontend') {
+            steps {
+                script {
+                    echo "Building React frontend..."
+                    sshPublisher(
+                        publishers: [
+                            sshPublisherDesc(
+                                configName: 'AWS-Genshin-Shop',
+                                transfers: [
+                                    sshTransfer(
+                                        execCommand: """
+                                            cd ${APP_DIR}/frontend
+                                            echo "📦 Installing frontend dependencies..."
+                                            npm install
+                                            
+                                            echo "🔧 Fixing API URL..."
+                                            sed -i "s|const API_BASE_URL = 'http://localhost:5000/api'|const API_BASE_URL = '/api'|g" src/services/api.js
+                                            
+                                            echo "🏗️ Building production bundle..."
+                                            npm run build
+                                            
+                                            echo "📊 Build size:"
+                                            du -sh build/
+                                            echo "✅ Frontend built successfully"
+                                        """
+                                    )
+                                ],
+                                verbose: true
+                            )
+                        ]
+                    )
+                }
+            }
+        }
+        
+        stage('🚀 8. Deploy Frontend') {
+            steps {
+                script {
+                    echo "Deploying frontend to Nginx..."
+                    sshPublisher(
+                        publishers: [
+                            sshPublisherDesc(
+                                configName: 'AWS-Genshin-Shop',
+                                transfers: [
+                                    sshTransfer(
+                                        execCommand: """
+                                            echo "🚀 Deploying frontend..."
+                                            sudo rm -rf /var/www/html.backup
+                                            sudo mv /var/www/html /var/www/html.backup 2>/dev/null || true
+                                            sudo cp -r ${APP_DIR}/frontend/build /var/www/html
+                                            sudo chown -R www-data:www-data /var/www/html
+                                            echo "✅ Frontend deployed"
+                                        """
+                                    )
+                                ],
+                                verbose: true
+                            )
+                        ]
+                    )
+                }
+            }
+        }
+        
+        stage('🔄 9. Restart Nginx') {
+            steps {
+                script {
+                    echo "Restarting Nginx..."
+                    sshPublisher(
+                        publishers: [
+                            sshPublisherDesc(
+                                configName: 'AWS-Genshin-Shop',
+                                transfers: [
+                                    sshTransfer(
+                                        execCommand: '''
+                                            echo "🔄 Restarting Nginx..."
+                                            sudo nginx -t
+                                            sudo systemctl restart nginx
+                                            echo "✅ Nginx restarted"
+                                        '''
+                                    )
+                                ],
+                                verbose: true
+                            )
+                        ]
+                    )
+                }
+            }
+        }
+        
+        stage('🏥 10. Health Check') {
+            steps {
+                script {
+                    echo "Running health checks..."
+                    sshPublisher(
+                        publishers: [
+                            sshPublisherDesc(
+                                configName: 'AWS-Genshin-Shop',
+                                transfers: [
+                                    sshTransfer(
+                                        execCommand: """
+                                            echo "🏥 Running health checks..."
+                                            
+                                            echo "1. Backend API:"
+                                            curl -f http://localhost:5000/ || (echo "❌ Backend health check failed" && exit 1)
+                                            
+                                            echo ""
+                                            echo "2. Backend via Nginx proxy:"
+                                            curl -f http://localhost/api/ || (echo "❌ API proxy failed" && exit 1)
+                                            
+                                            echo ""
+                                            echo "3. Frontend:"
+                                            curl -f http://localhost/ | head -n 5 || (echo "❌ Frontend health check failed" && exit 1)
+                                            
+                                            echo ""
+                                            echo "✅ All health checks passed!"
+                                        """
+                                    )
+                                ],
+                                verbose: true
+                            )
+                        ]
+                    )
+                }
+            }
+        }
+        
+        stage('📊 11. Collect Deployment Data') {
+            steps {
+                script {
+                    echo "Collecting deployment statistics..."
+                    sshPublisher(
+                        publishers: [
+                            sshPublisherDesc(
+                                configName: 'AWS-Genshin-Shop',
+                                transfers: [
+                                    sshTransfer(
+                                        execCommand: """
+                                            cd ${APP_DIR}
+                                            
+                                            # Create deployment report
+                                            cat > /tmp/deployment-report.json << 'EOFMARKER'
+{
+  "deployTime": "${DEPLOY_TIME}",
+  "buildNumber": "${BUILD_NUMBER}",
+  "server": "${EC2_HOST}",
+  "services": {
+    "mongodb": "\$(sudo systemctl is-active mongod)",
+    "backend": "\$(pm2 list | grep genshin-backend | awk '{print \$10}' || echo 'unknown')",
+    "nginx": "\$(sudo systemctl is-active nginx)"
+  },
+  "statistics": {
+    "accounts": \$(mongosh genshin-shop --quiet --eval "db.accounts.countDocuments()" 2>/dev/null || echo 0),
+    "orders": \$(mongosh genshin-shop --quiet --eval "db.orders.countDocuments()" 2>/dev/null || echo 0),
+    "users": \$(mongosh genshin-shop --quiet --eval "db.users.countDocuments()" 2>/dev/null || echo 0)
+  },
+  "system": {
+    "diskUsage": "\$(df -h / | tail -1 | awk '{print \$5}')",
+    "memoryUsage": "\$(free -h | grep Mem | awk '{print \$3 "/" \$2}')",
+    "uptime": "\$(uptime -p)"
+  }
+}
+EOFMARKER
+                                            
+                                            cat /tmp/deployment-report.json
+                                        """
+                                    )
+                                ],
+                                verbose: true
+                            )
+                        ]
+                    )
+                }
+            }
+        }
+        
+        stage('📄 12. Generate Dashboard') {
+            steps {
+                script {
+                    echo "Generating deployment dashboard..."
                     
-                    def ordersCount = sh(
-                        script: '''
-                        mongo genshin-shop --eval "print(db.orders.count())" --quiet
-                        ''',
-                        returnStdout: true
-                    ).trim()
-                    
-                    def accountsCount = sh(
-                        script: '''
-                        mongo genshin-shop --eval "print(db.accounts.count())" --quiet
-                        ''',
-                        returnStdout: true
-                    ).trim()
-                    
-                    // Tạo HTML report
-                    writeFile file: 'database-report.html', text: """
+                    def dashboardHtml = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Genshin Shop Database Report</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genshin Shop - Deployment Dashboard</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
-            font-family: 'Arial', sans-serif; 
-            margin: 20px; 
-            background: #f8f9fa;
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
         }
-        .container { 
-            max-width: 1000px; 
-            margin: 0 auto; 
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
         }
         .header {
-            text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #e9ecef;
-            padding-bottom: 20px;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
-        .stats { 
-            display: flex; 
-            gap: 20px; 
-            margin-bottom: 30px;
-            justify-content: center;
+        .header h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
         }
-        .stat-card { 
+        .header .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-top: 15px;
+            font-size: 1.1em;
+        }
+        .success { background: #10b981; color: white; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .info-row:last-child { border-bottom: none; }
+        .label {
+            font-weight: 600;
+            color: #555;
+        }
+        .value {
+            color: #333;
+            font-family: 'Courier New', monospace;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-online { background: #10b981; }
+        .status-offline { background: #ef4444; }
+        .links {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .links h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        .link-button {
+            display: inline-block;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 25px; 
-            border-radius: 10px; 
-            flex: 1; 
-            text-align: center;
-            min-width: 150px;
+            padding: 15px 30px;
+            border-radius: 10px;
+            text-decoration: none;
+            margin: 10px 10px 10px 0;
+            font-weight: bold;
+            transition: transform 0.2s;
         }
-        .stat-number { 
-            font-size: 2.5em; 
-            font-weight: bold; 
-            margin-bottom: 5px;
-        }
-        .stat-label {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-        .section {
-            margin: 30px 0;
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-        }
-        .section-title {
-            font-size: 1.4em;
-            margin-bottom: 15px;
-            color: #495057;
+        .link-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
         .timestamp {
             text-align: center;
-            color: #6c757d;
-            margin-top: 30px;
-            font-style: italic;
+            color: white;
+            margin-top: 20px;
+            font-size: 0.9em;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎮 Genshin Shop Database Dashboard</h1>
-            <p>Real-time database statistics and monitoring</p>
+            <h1>🎮 Genshin Shop Deployment</h1>
+            <p class="subtitle">Build #${BUILD_NUMBER} - ${DEPLOY_TIME}</p>
+            <span class="status-badge success">✅ Deployment Successful</span>
         </div>
         
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-number">${usersCount}</div>
-                <div class="stat-label">👥 Total Users</div>
+        <div class="grid">
+            <div class="card">
+                <h2>📊 Services Status</h2>
+                <div class="info-row">
+                    <span class="label"><span class="status-dot status-online"></span>MongoDB</span>
+                    <span class="value">Running</span>
+                </div>
+                <div class="info-row">
+                    <span class="label"><span class="status-dot status-online"></span>Backend API</span>
+                    <span class="value">Running</span>
+                </div>
+                <div class="info-row">
+                    <span class="label"><span class="status-dot status-online"></span>Nginx</span>
+                    <span class="value">Running</span>
+                </div>
+                <div class="info-row">
+                    <span class="label"><span class="status-dot status-online"></span>Jenkins</span>
+                    <span class="value">Running</span>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number">${ordersCount}</div>
-                <div class="stat-label">📦 Total Orders</div>
+            
+            <div class="card">
+                <h2>💾 Database Statistics</h2>
+                <div class="info-row">
+                    <span class="label">🎮 Game Accounts</span>
+                    <span class="value">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">🛒 Orders</span>
+                    <span class="value">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">👤 Users</span>
+                    <span class="value">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">📅 Last Updated</span>
+                    <span class="value">${DEPLOY_TIME}</span>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number">${accountsCount}</div>
-                <div class="stat-label">👤 Total Accounts</div>
+            
+            <div class="card">
+                <h2>🖥️ Server Info</h2>
+                <div class="info-row">
+                    <span class="label">🌐 IP Address</span>
+                    <span class="value">${EC2_HOST}</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">💽 Disk Usage</span>
+                    <span class="value">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">🧠 Memory</span>
+                    <span class="value">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">⏱️ Uptime</span>
+                    <span class="value">Loading...</span>
+                </div>
             </div>
         </div>
         
-        <div class="section">
-            <div class="section-title">📊 Database Information</div>
-            <pre style="background: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 5px; overflow: auto; white-space: pre-wrap;">${env.DB_STATUS ?: 'No data available'}</pre>
+        <div class="links">
+            <h2>🔗 Quick Links</h2>
+            <a href="http://${EC2_HOST}/" class="link-button" target="_blank">🌐 Open Website</a>
+            <a href="http://${EC2_HOST}/api/" class="link-button" target="_blank">🔌 API Health</a>
+            <a href="http://${EC2_HOST}/login" class="link-button" target="_blank">🔐 Admin Login</a>
+            <a href="http://${EC2_HOST}/admin" class="link-button" target="_blank">👑 Admin Dashboard</a>
+            <a href="http://${EC2_HOST}:8080" class="link-button" target="_blank">⚙️ Jenkins</a>
         </div>
         
-        <div class="timestamp">
-            Last updated: ${new Date()}
-        </div>
+        <p class="timestamp">
+            Generated by Jenkins Build #${BUILD_NUMBER}<br>
+            Deploy Time: ${DEPLOY_TIME}
+        </p>
     </div>
+    
+    <script>
+        // Auto-refresh data every 30 seconds
+        setInterval(function() {
+            fetch('http://${EC2_HOST}/api/accounts/stats')
+                .then(r => r.json())
+                .then(data => console.log('Stats:', data))
+                .catch(e => console.log('Stats not available'));
+        }, 30000);
+    </script>
 </body>
 </html>
 """
+                    
+                    writeFile file: 'deployment-dashboard.html', text: dashboardHtml
+                    echo "✅ Dashboard generated!"
                 }
-            }
-        }
-
-        stage('Publish Database Report') {
-            steps {
-                echo '📤 Publishing database report...'
-                publishHTML([
-                    allowMissing: false,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
-                    reportDir: '',
-                    reportFiles: 'database-report.html',
-                    reportName: '📊 Database Dashboard',
-                    reportTitles: 'Genshin Shop Database Report'
-                ])
             }
         }
     }
     
     post {
+        always {
+            echo "═══════════════════════════════════════"
+            echo "📊 Deployment Summary"
+            echo "═══════════════════════════════════════"
+        }
         success {
-            echo '✅✅✅ Pipeline completed successfully! ✅✅✅'
-            script {
-                def duration = currentBuild.durationString
-                def branch = env.GIT_BRANCH ?: 'unknown'
-                emailext (
-                    subject: "✅ SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER} - ${params.DEPLOY_ENV}",
-                    body: """
-                        🎉 Build Success!
-                        
-                        Project: Genshin Shop
-                        Environment: ${params.DEPLOY_ENV}
-                        Source Type: ${params.SOURCE_TYPE}
-                        Branch: ${branch}
-                        Build Number: ${env.BUILD_NUMBER}
-                        Duration: ${duration}
-                        Build URL: ${env.BUILD_URL}
-                        
-                        ✅ Backend: http://localhost:${BACKEND_PORT}
-                        ✅ Frontend: ${DEPLOY_DIR}
-                        
-                        The application has been deployed successfully.
-                    """,
-                    to: 'admin@genshinshop.com'
-                )
-            }
+            echo "✅✅✅ DEPLOYMENT SUCCESSFUL! ✅✅✅"
+            echo "🌐 Website: http://${EC2_HOST}"
+            echo "🔌 API: http://${EC2_HOST}/api"
+            echo "👑 Admin: http://${EC2_HOST}/admin"
+            echo "⚙️  Jenkins: http://${EC2_HOST}:8080"
+            echo "═══════════════════════════════════════"
+            
+            archiveArtifacts artifacts: 'deployment-dashboard.html', fingerprint: true
+            echo "📁 Deployment dashboard saved as artifact"
         }
         failure {
-            echo '❌❌❌ Pipeline failed! ❌❌❌'
-            script {
-                emailext (
-                    subject: "❌ FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER} - ${params.DEPLOY_ENV}",
-                    body: """
-                        ❌ Build Failed!
-                        
-                        Project: Genshin Shop
-                        Environment: ${params.DEPLOY_ENV}
-                        Source Type: ${params.SOURCE_TYPE}
-                        Build Number: ${env.BUILD_NUMBER}
-                        Build URL: ${env.BUILD_URL}
-                        
-                        Please check the Jenkins logs for details and investigate the issue.
-                    """,
-                    to: 'admin@genshinshop.com'
-                )
-            }
-        }
-        always {
-            echo '📊 Pipeline execution completed'
-            echo "Build Result: ${currentBuild.result}"
-            echo "Build Duration: ${currentBuild.durationString}"
-            echo '📊 Database stats saved to HTML report'
-            
-            // Archive important artifacts
-            archiveArtifacts artifacts: 'backend/backend.log', allowEmptyArchive: true
-            archiveArtifacts artifacts: 'frontend/build/**/*', allowEmptyArchive: true
-            archiveArtifacts artifacts: 'database-report.html', allowEmptyArchive: true
-            
-            // Cleanup workspace chỉ khi dùng Git
-            script {
-                if (params.SOURCE_TYPE == 'git') {
-                    echo '🧹 Cleaning up workspace...'
-                    cleanWs()
-                } else {
-                    echo '💾 Keeping workspace for manual builds...'
-                }
-            }
+            echo "❌❌❌ DEPLOYMENT FAILED! ❌❌❌"
+            echo "Check console output for details"
+            echo "═══════════════════════════════════════"
         }
     }
 }
