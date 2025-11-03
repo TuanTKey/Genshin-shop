@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: genshin-shop-frontend
+    env: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REACT_APP_API_URL
+        value: https://genshin-shop-backend.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    plan: free
+
+  - type: web
+    name: genshin-shop-backend
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        value: mongodb://localhost:27017/genshin-shop
+      - key: PORT
+        value: 5000
+    plan: free
+
+databases:
+  - name: genshin-mongodb
+    plan: free
+    databaseName: genshin-shop
