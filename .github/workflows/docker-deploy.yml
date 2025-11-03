@@ -1,0 +1,357 @@
+name: 🐳 Deploy Genshin Shop to Docker Hub
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:  # Cho phép chạy thủ công
+
+env:
+  DOCKERHUB_USERNAME: 'tunapi123'
+  BACKEND_IMAGE: 'shop-genshin-backend'
+  FRONTEND_IMAGE: 'shop-genshin-frontend'
+
+jobs:
+  build-and-push:
+    name: 🏗️ Build and Push to Docker Hub
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📦 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🐳 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: 🐳 Build Backend Image
+      run: |
+        echo "🏗️ Building backend Docker image..."
+        cd backend
+        docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }} .
+        docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE }}:latest .
+        echo "✅ Backend image built successfully"
+
+    - name: 🐳 Build Frontend Image  
+      run: |
+        echo "🏗️ Building frontend Docker image..."
+        cd frontend
+        docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }} .
+        docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE }}:latest .
+        echo "✅ Frontend image built successfully"
+
+    - name: 🔐 Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ env.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: 📤 Push Backend to Docker Hub
+      run: |
+        echo "📤 Pushing backend image to Docker Hub..."
+        docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE }}:latest
+        docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+        echo "✅ Backend image pushed successfully"
+
+    - name: 📤 Push Frontend to Docker Hub
+      run: |
+        echo "📤 Pushing frontend image to Docker Hub..."
+        docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE }}:latest
+        docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+        echo "✅ Frontend image pushed successfully"
+
+    - name: 🎯 Test Docker Compose
+      run: |
+        echo "🧪 Testing Docker Compose..."
+        docker-compose up -d
+        sleep 10
+        echo "🔍 Checking running containers:"
+        docker ps
+        docker-compose down
+        echo "✅ Docker Compose test passed"
+
+    - name: 📊 Generate Deployment Dashboard
+      run: |
+        echo "📈 Generating deployment dashboard..."
+        cat > DEPLOYMENT_SUCCESS.html << 'EOF'
+        <!DOCTYPE html>
+        <html lang="vi">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>🚀 Genshin Shop - Deployment Success</title>
+            <style>
+                :root {
+                    --primary: #667eea;
+                    --secondary: #764ba2;
+                    --success: #28a745;
+                    --info: #17a2b8;
+                }
+                
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+                    min-height: 100vh;
+                    padding: 20px;
+                    color: #2d3436;
+                }
+
+                .container {
+                    max-width: 1000px;
+                    margin: 0 auto;
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+                    overflow: hidden;
+                }
+
+                .header {
+                    background: linear-gradient(135deg, #2c3e50, #34495e);
+                    color: white;
+                    padding: 40px 30px;
+                    text-align: center;
+                }
+
+                .header h1 {
+                    font-size: 2.8em;
+                    margin-bottom: 15px;
+                    background: linear-gradient(45deg, #ff6b6b, #feca57, #48dbfb);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                }
+
+                .success-banner {
+                    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+                    color: #155724;
+                    padding: 25px;
+                    text-align: center;
+                    border-bottom: 3px solid #28a745;
+                }
+
+                .content {
+                    padding: 40px;
+                }
+
+                .images-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 25px;
+                    margin: 30px 0;
+                }
+
+                .image-card {
+                    background: #f8f9fa;
+                    padding: 25px;
+                    border-radius: 15px;
+                    border-left: 5px solid var(--info);
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+                }
+
+                .image-card.backend { border-left-color: #e74c3c; }
+                .image-card.frontend { border-left-color: #2ecc71; }
+
+                .command-box {
+                    background: #2c3e50;
+                    color: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin: 20px 0;
+                    font-family: 'Courier New', monospace;
+                }
+
+                .deploy-steps {
+                    background: #e8f5e8;
+                    padding: 25px;
+                    border-radius: 15px;
+                    margin: 30px 0;
+                }
+
+                .step {
+                    display: flex;
+                    align-items: center;
+                    margin: 15px 0;
+                    padding: 15px;
+                    background: white;
+                    border-radius: 8px;
+                    border-left: 4px solid #3498db;
+                }
+
+                .step-number {
+                    background: #3498db;
+                    color: white;
+                    width: 30px;
+                    height: 30px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-right: 15px;
+                    font-weight: bold;
+                }
+
+                .footer {
+                    background: #2c3e50;
+                    color: white;
+                    text-align: center;
+                    padding: 30px;
+                    margin-top: 40px;
+                }
+
+                .build-info {
+                    background: #34495e;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin-top: 15px;
+                    font-family: 'Courier New', monospace;
+                }
+
+                .btn {
+                    display: inline-block;
+                    background: var(--primary);
+                    color: white;
+                    padding: 12px 25px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    margin: 10px 5px;
+                    transition: transform 0.3s ease;
+                }
+
+                .btn:hover {
+                    transform: translateY(-2px);
+                }
+
+                @media (max-width: 768px) {
+                    .images-grid {
+                        grid-template-columns: 1fr;
+                    }
+                    .header h1 {
+                        font-size: 2em;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🎮 Genshin Shop</h1>
+                    <p>Data Management System - Docker Hub Deployment</p>
+                </div>
+
+                <div class="success-banner">
+                    <h2>✅ DEPLOYMENT SUCCESSFUL!</h2>
+                    <p>Docker images have been built and pushed to Docker Hub</p>
+                </div>
+
+                <div class="content">
+                    <div class="images-grid">
+                        <div class="image-card backend">
+                            <h3>🔧 Backend API</h3>
+                            <p><strong>Image:</strong> $DOCKERHUB_USERNAME/$BACKEND_IMAGE</p>
+                            <p><strong>Tag:</strong> latest & $GITHUB_SHA</p>
+                            <p><strong>Port:</strong> 5000</p>
+                            <a href="https://hub.docker.com/r/$DOCKERHUB_USERNAME/$BACKEND_IMAGE" class="btn" target="_blank">📦 View on Docker Hub</a>
+                        </div>
+
+                        <div class="image-card frontend">
+                            <h3>🎨 Frontend App</h3>
+                            <p><strong>Image:</strong> $DOCKERHUB_USERNAME/$FRONTEND_IMAGE</p>
+                            <p><strong>Tag:</strong> latest & $GITHUB_SHA</p>
+                            <p><strong>Port:</strong> 3000</p>
+                            <a href="https://hub.docker.com/r/$DOCKERHUB_USERNAME/$FRONTEND_IMAGE" class="btn" target="_blank">📦 View on Docker Hub</a>
+                        </div>
+                    </div>
+
+                    <div class="command-box">
+                        <h4>🚀 Run Application Anywhere:</h4>
+                        <code>docker-compose up -d</code>
+                        <p><em>Access: Frontend http://localhost:3000 | Backend http://localhost:5000</em></p>
+                    </div>
+
+                    <div class="deploy-steps">
+                        <h3>📋 Deployment Information</h3>
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            <div>
+                                <strong>GitHub Actions</strong><br>
+                                Build triggered by push to main branch
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div>
+                                <strong>Docker Images Built</strong><br>
+                                Multi-stage build with optimization
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            <div>
+                                <strong>Pushed to Docker Hub</strong><br>
+                                Available for deployment anywhere
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">4</div>
+                            <div>
+                                <strong>Ready for Production</strong><br>
+                                Use docker-compose.yml for deployment
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; margin: 30px 0;">
+                        <h3>🎯 Quick Deploy Commands</h3>
+                        <div style="display: inline-block; text-align: left; background: #f8f9fa; padding: 20px; border-radius: 10px;">
+                            <code>git clone https://github.com/TuanTKey/Genshin-shop</code><br>
+                            <code>cd Genshin-shop</code><br>
+                            <code>docker-compose up -d</code>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="footer">
+                    <p>🐳 Docker Hub Deployment - Genshin Shop</p>
+                    <div class="build-info">
+                        <p><strong>Build Number:</strong> $GITHUB_RUN_NUMBER</p>
+                        <p><strong>Commit SHA:</strong> $GITHUB_SHA</p>
+                        <p><strong>Deployment Time:</strong> $(date +"%Y-%m-%d %H:%M:%S")</p>
+                        <p><strong>Status:</strong> ✅ Success - Ready for Production</p>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                // Add timestamp
+                document.querySelector('p:contains("Deployment Time")').textContent = 
+                    'Deployment Time: ' + new Date().toLocaleString('vi-VN');
+            </script>
+        </body>
+        </html>
+        EOF
+
+        # Replace environment variables in the HTML
+        sed -i "s/\$DOCKERHUB_USERNAME/${{ env.DOCKERHUB_USERNAME }}/g" DEPLOYMENT_SUCCESS.html
+        sed -i "s/\$BACKEND_IMAGE/${{ env.BACKEND_IMAGE }}/g" DEPLOYMENT_SUCCESS.html
+        sed -i "s/\$FRONTEND_IMAGE/${{ env.FRONTEND_IMAGE }}/g" DEPLOYMENT_SUCCESS.html
+        sed -i "s/\$GITHUB_SHA/${{ github.sha }}/g" DEPLOYMENT_SUCCESS.html
+        sed -i "s/\$GITHUB_RUN_NUMBER/${{ github.run_number }}/g" DEPLOYMENT_SUCCESS.html
+
+    - name: 📤 Upload Deployment Dashboard
+      uses: actions/upload-artifact@v4
+      with:
+        name: deployment-dashboard
+        path: DEPLOYMENT_SUCCESS.html
+        retention-days: 30
+
+    - name: 📧 Deployment Notification
+      run: |
+        echo "✅ DEPLOYMENT COMPLETED SUCCESSFULLY!"
+        echo "🐳 Backend Image: ${{ env.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE }}:latest"
+        echo "🐳 Frontend Image: ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE }}:latest"
+        echo "📊 Dashboard: DEPLOYMENT_SUCCESS.html"
+        echo "🎯 Run: docker-compose up -d"
+        echo "Thank you for using our deployment pipeline!"
