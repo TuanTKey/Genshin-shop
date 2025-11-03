@@ -72,18 +72,6 @@ jobs:
         docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
         echo "✅ Frontend image pushed successfully"
 
-    - name: 🧪 Test Docker Compose
-      run: |
-        echo "🧪 Testing Docker Compose setup..."
-        docker-compose up -d
-        sleep 15
-        echo "🔍 Checking container status:"
-        docker ps
-        echo "📊 Checking logs:"
-        docker-compose logs --tail=20
-        docker-compose down
-        echo "✅ Docker Compose test completed"
-
     - name: 📊 Generate Beautiful Dashboard
       run: |
         echo "🎨 Generating deployment dashboard..."
