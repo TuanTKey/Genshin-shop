@@ -69,23 +69,23 @@ jobs:
         </html>
         EOF
 
-            - name: 📤 Upload Live URLs
-              uses: actions/upload-artifact@v4
-              with:
-                name: live-urls
-                path: live-urls.html
-                retention-days: 90
+    - name: 📤 Upload Live URLs
+      uses: actions/upload-artifact@v4
+      with:
+        name: live-urls
+        path: live-urls.html
+        retention-days: 90
 
-            - name: 🎉 Deployment Success
-              run: |
-                echo ""
-                echo "🎉 ==========================================="
-                echo "🚀 RENDER DEPLOYMENT TRIGGERED!"
-                echo "🎉 ==========================================="
-                echo ""
-                echo "🌐 LIVE URL:"
-                echo "   🛍️ Shop: https://genshin-shop-vip.onrender.com"
-                echo "   ⚙️ Admin: https://genshin-shop-vip.onrender.com/admin"
-                echo ""
-                echo "📊 Check progress at: https://dashboard.render.com"
-                echo "==========================================="
+    - name: 🎉 Deployment Success
+      run: |
+        echo ""
+        echo "🎉 ==========================================="
+        echo "🚀 RENDER DEPLOYMENT TRIGGERED!"
+        echo "🎉 ==========================================="
+        echo ""
+        echo "🌐 LIVE URL:"
+        echo "   🛍️ Shop: https://genshin-shop-vip.onrender.com"
+        echo "   ⚙️ Admin: https://genshin-shop-vip.onrender.com/admin"
+        echo ""
+        echo "📊 Check progress at: https://dashboard.render.com"
+        echo "==========================================="
