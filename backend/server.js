@@ -1,6 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path'); // ← THÊM DÒNG NÀY
+
 require('dotenv').config();
 
 const app = express();
@@ -10,6 +12,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use(express.static(path.join(__dirname, '../frontend/build')));
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
@@ -22,7 +25,7 @@ mongoose.connect(process.env.MONGODB_URI, {
 });
 
 // Test route
-app.get('/', (req, res) => {
+app.get('/api', (req, res) => {
   res.json({ message: 'Genshin Shop API is running!' });
 });
 
@@ -35,6 +38,11 @@ const authRoutes = require('./routes/authRoutes'); // NEW
 app.use('/api/accounts', accountRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/auth', authRoutes); // NEW
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
+});
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
