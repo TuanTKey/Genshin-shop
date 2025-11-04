@@ -39,7 +39,7 @@ app.use('/api/accounts', accountRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/auth', authRoutes); // NEW
 
-app.get('*', (req, res) => {
+app.get(/\/(?!api).*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
 });
 
