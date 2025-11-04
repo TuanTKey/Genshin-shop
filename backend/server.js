@@ -14,7 +14,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI, {
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/genshin-shop', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
