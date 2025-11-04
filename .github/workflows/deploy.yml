@@ -20,4 +20,5 @@ jobs:
           echo ""
           echo "⏰ Render sẽ auto-deploy trong 2-5 phút..."
           echo "📊 Check: https://dashboard.render.com"
+          echo "test deploy $(date)" > deploy-test.txt
           echo "==========================================="
