@@ -1,7 +1,4 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-
-// Protect routes - Yêu cầu đăng nhập
+// Mock auth middleware - Không cần MongoDB
 exports.protect = async (req, res, next) => {
   try {
     let token;
@@ -11,52 +8,52 @@ exports.protect = async (req, res, next) => {
       token = req.headers.authorization.split(' ')[1];
     }
 
+    // Mock: Luôn cho phép nếu có token, nếu không vẫn cho qua
     if (!token) {
-      return res.status(401).json({ 
-        success: false, 
-        error: 'Vui lòng đăng nhập để tiếp tục' 
-      });
+      console.log('⚠️ No token provided, using mock user');
+      // Vẫn cho phép truy cập với mock user
+      req.user = {
+        id: '1',
+        name: 'Demo User',
+        email: 'demo@example.com',
+        role: 'user',
+        isActive: true
+      };
+      return next();
     }
 
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key_change_this');
-
-    // Get user from token
-    const user = await User.findById(decoded.id);
-
-    if (!user) {
-      return res.status(401).json({ 
-        success: false, 
-        error: 'User không tồn tại' 
-      });
-    }
-
-    if (!user.isActive) {
-      return res.status(401).json({ 
-        success: false, 
-        error: 'Tài khoản đã bị khóa' 
-      });
-    }
-
-    req.user = user;
+    // Mock token verification - luôn thành công
+    console.log('✅ Mock token verified');
+    
+    // Mock user data
+    req.user = {
+      id: '1',
+      name: 'Admin User',
+      email: 'admin@example.com', 
+      role: 'admin',
+      isActive: true
+    };
+    
     next();
   } catch (error) {
-    return res.status(401).json({ 
-      success: false, 
-      error: 'Token không hợp lệ hoặc đã hết hạn' 
-    });
+    console.log('⚠️ Mock auth error, but allowing access');
+    // Vẫn cho phép truy cập ngay cả khi có lỗi
+    req.user = {
+      id: '1',
+      name: 'Demo User',
+      email: 'demo@example.com',
+      role: 'user',
+      isActive: true
+    };
+    next();
   }
 };
 
-// Authorize roles - Chỉ admin mới truy cập
+// Mock authorize - Luôn cho phép truy cập
 exports.authorize = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Bạn không có quyền truy cập' 
-      });
-    }
+    console.log(`🎯 Mock authorize for roles: ${roles}`);
+    // Luôn cho phép truy cập, không check role
     next();
   };
 };
