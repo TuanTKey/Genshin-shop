@@ -1,0 +1,23 @@
+name: 🚀 Deploy to Render
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🎉 Trigger Render Deploy
+        run: |
+          echo "==========================================="
+          echo "🚀 RENDER AUTO-DEPLOY STARTED!"
+          echo "==========================================="
+          echo "📦 Commit: ${{ github.sha }}"
+          echo "👤 By: ${{ github.actor }}"
+          echo "🌐 Live URL: https://genshin-shop-vip.onrender.com"
+          echo ""
+          echo "⏰ Render sẽ auto-deploy trong 2-5 phút..."
+          echo "📊 Check: https://dashboard.render.com"
+          echo "==========================================="

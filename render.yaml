@@ -3,7 +3,7 @@ services:
     name: genshin-shop-frontend
     env: docker
     dockerfilePath: ./frontend/Dockerfile
-    dockerContext: ./
+    dockerContext: ./frontend
     envVars:
       - key: NODE_ENV
         value: production
@@ -19,7 +19,7 @@ services:
     name: genshin-shop-backend
     env: docker
     dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./
+    dockerContext: ./backend
     envVars:
       - key: NODE_ENV
         value: production
