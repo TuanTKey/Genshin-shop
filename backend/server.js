@@ -21,10 +21,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 🔥 XÓA dòng này - Frontend được serve riêng
-// app.use(express.static(path.join(__dirname, '../frontend/build')));
-
-// MongoDB Connection - SỬA deprecated options
+// MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/genshin-shop')
 .then(() => console.log('✅ MongoDB connected successfully'))
 .catch(err => {
@@ -59,17 +56,24 @@ app.use('/api/accounts', accountRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/auth', authRoutes);
 
-// 🔥 XÓA hoặc SỬA catch-all route này
+// 🔥 SỬA LỖI: Thay thế catch-all route bằng cách này
+// Handle undefined API routes
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ 
+    success: false, 
+    error: 'API route not found',
+    path: req.originalUrl 
+  });
+});
+
+// Handle non-API routes (for frontend)
 app.get('*', (req, res) => {
-  if (req.path.startsWith('/api')) {
-    res.status(404).json({ error: 'API route not found' });
-  } else {
-    res.status(200).json({ 
-      message: 'Backend server is running. Frontend is served separately.',
-      backend: 'https://genshin-shop-backend.onrender.com',
-      frontend: 'https://genshin-shop-gs.onrender.com'
-    });
-  }
+  res.status(200).json({ 
+    message: 'Genshin Shop Backend is running',
+    backend: 'https://genshin-shop-backend.onrender.com',
+    frontend: 'https://genshin-shop-gs.onrender.com',
+    api_docs: 'Visit /api for API information'
+  });
 });
 
 // Error handling middleware
@@ -81,8 +85,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server - ĐỂ RENDER TỰ ĐỘNG SET PORT
+// Start server
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`📊 MongoDB: ${mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'}`);
 });
