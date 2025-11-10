@@ -19,8 +19,6 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
 
-app.options('*', cors());
-
 // MongoDB Connection - FIXED
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://shop_ghenshin_db_user:tuan1311@cluster0.8vfcbgu.mongodb.net/genshin-shop?retryWrites=true&w=majority';
 
