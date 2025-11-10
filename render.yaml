@@ -26,6 +26,6 @@ services:
       - key: MONGODB_URI
         value: mongodb+srv://shop_ghenshin_db_user:tuan1311@cluster0.8vfcbgu.mongodb.net/genshin-shop?appName=Cluster0
       - key: JWT_SECRET
-        value: your-super-secret-jwt-key-here-2024
+        value: genshin-shop-jwt-secret-2024
     healthCheckPath: /api/health
     plan: free
