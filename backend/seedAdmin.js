@@ -1,10 +1,12 @@
 const mongoose = require('mongoose');
 const User = require('./models/User');
-require('dotenv').config();
+
+// 🔥 SỬA: Dùng MongoDB URI trực tiếp thay vì từ .env
+const MONGODB_URI = 'mongodb+srv://shop_ghenshin_db_user:tuan1311@cluster0.8vfcbgu.mongodb.net/genshin-shop?retryWrites=true&w=majority';
 
 const createAdminUser = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI, {
+    await mongoose.connect(MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true
     });
