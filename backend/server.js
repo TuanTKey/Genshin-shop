@@ -4,6 +4,9 @@ const cors = require('cors');
 
 const app = express();
 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 // CORS Configuration
 app.use(cors({
   origin: [
@@ -16,8 +19,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.options('*', cors());
 
 // MongoDB Connection - FIXED
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://shop_ghenshin_db_user:tuan1311@cluster0.8vfcbgu.mongodb.net/genshin-shop?retryWrites=true&w=majority';
