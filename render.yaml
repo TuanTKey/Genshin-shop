@@ -24,7 +24,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: MONGODB_URI
-        value: mongodb://localhost:27017/genshin-shop
+        value: mongodb+srv://shop_ghenshin_db_user:tuan1311@cluster0.8vfcbgu.mongodb.net/genshin-shop?appName=Cluster0
       - key: PORT
         value: 5000
     plan: free
