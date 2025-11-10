@@ -23,12 +23,12 @@ const mockUsers = [
   }
 ];
 
-// Mock register - ĐÃ SỬA ĐỂ NHẬN fullName
+// Mock register - ĐÃ SỬA THÊM TOKEN
 router.post('/register', (req, res) => {
   const { fullName, username, email, password, phone } = req.body;
   console.log('👤 Mock register - Data received:', req.body);
   
-  // 🔥 FIX: Dùng fullName hoặc username làm name
+  // Dùng fullName hoặc username làm name
   const userName = fullName || username || 'User';
   
   // Check if email exists
@@ -54,9 +54,11 @@ router.post('/register', (req, res) => {
   
   console.log('✅ User registered successfully:', newUser.email);
   
+  // 🔥 FIX: THÊM TOKEN VÀO RESPONSE
   res.json({
     success: true,
     message: 'Đăng ký thành công!',
+    token: 'mock-jwt-token-' + Date.now(), // ← THÊM DÒNG NÀY
     user: {
       id: newUser.id,
       name: newUser.name,
@@ -68,7 +70,7 @@ router.post('/register', (req, res) => {
   });
 });
 
-// Mock login - ĐÃ SỬA ĐỂ LOG CHI TIẾT
+// Mock login
 router.post('/login', (req, res) => {
   const { email, password } = req.body;
   console.log('🔐 Mock login attempt:', email);
@@ -97,12 +99,13 @@ router.post('/login', (req, res) => {
   }
 });
 
-// Mock get current user
+// Mock get current user - ĐÃ SỬA THÊM TOKEN
 router.get('/me', (req, res) => {
   // Mock authentication - giả sử user đã đăng nhập
   const user = mockUsers[0]; // Lấy user đầu tiên
   res.json({
     success: true,
+    token: 'mock-jwt-token-current', // ← THÊM TOKEN
     user: {
       id: user.id,
       name: user.name,
@@ -113,7 +116,7 @@ router.get('/me', (req, res) => {
   });
 });
 
-// Mock update profile - ĐÃ SỬA ĐỂ NHẬN fullName
+// Mock update profile
 router.put('/profile', (req, res) => {
   const { fullName, email, phone } = req.body;
   console.log('📝 Mock update profile:', { fullName, email, phone });
