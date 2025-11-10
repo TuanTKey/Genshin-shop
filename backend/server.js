@@ -56,25 +56,8 @@ app.use('/api/accounts', accountRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/auth', authRoutes);
 
-// 🔥 SỬA LỖI: Thay thế catch-all route bằng cách này
-// Handle undefined API routes
-app.use('/api/*', (req, res) => {
-  res.status(404).json({ 
-    success: false, 
-    error: 'API route not found',
-    path: req.originalUrl 
-  });
-});
-
-// Handle non-API routes (for frontend)
-app.get('*', (req, res) => {
-  res.status(200).json({ 
-    message: 'Genshin Shop Backend is running',
-    backend: 'https://genshin-shop-backend.onrender.com',
-    frontend: 'https://genshin-shop-gs.onrender.com',
-    api_docs: 'Visit /api for API information'
-  });
-});
+// 🔥 ĐƠN GIẢN: XÓA TẤT CẢ CATCH-ALL ROUTES
+// Chỉ thêm các route cụ thể, không dùng '*'
 
 // Error handling middleware
 app.use((err, req, res, next) => {
