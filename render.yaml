@@ -25,9 +25,5 @@ services:
         value: production
       - key: MONGODB_URI
         value: mongodb+srv://shop_ghenshin_db_user:tuan1311@cluster0.8vfcbgu.mongodb.net/genshin-shop?appName=Cluster0
+    healthCheckPath: /api/health
     plan: free
-
-databases:
-  - name: genshin-mongodb
-    plan: free
-    databaseName: genshin-shop
